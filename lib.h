@@ -13,6 +13,7 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/wait.h>
+#include <pthread.h>
 
 typedef struct sockaddr SA;
 /* Persistent state for the robust I/O (Rio) package */

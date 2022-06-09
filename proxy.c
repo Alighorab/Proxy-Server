@@ -1,6 +1,9 @@
 #include "lib.h"
+#include <pthread.h>
+#include <stdlib.h>
 #include <string.h>
 
+void* thread(void *vargp);
 void read_request(int connfd, char *request, char *headers);
 void parse_request(int connfd, char *request, char *headers, 
         char *host, char *port);
@@ -12,12 +15,10 @@ void forward_response(int listenfd, char *headers, char **content, int content_l
 int
 main(int argc, char* argv[])
 {
-    int listenfd, connfd, clientfd;
+    int listenfd, *connfdp = NULL;
     struct sockaddr_storage clientaddr;
     socklen_t clientlen;
-    char request[MAXLINE], headers[MAXLINE], host[MAXLINE], port[MAXLINE];
-    char *content;
-    int content_length;
+    pthread_t tid;
 
     if (argc != 2) {
         fprintf(stderr, "usage: %s <port>\n", argv[0]);
@@ -33,31 +34,50 @@ main(int argc, char* argv[])
     signal(SIGPIPE, SIG_IGN); 
 
     while (1) {
-        clientlen = sizeof(clientaddr);
-        if ((connfd = accept(listenfd, (SA*)&clientaddr, &clientlen)) < 0) {
+        clientlen = sizeof(struct sockaddr_storage);
+        connfdp = (int*) malloc(sizeof(int));
+
+        if ((*connfdp = accept(listenfd, (SA*)&clientaddr, &clientlen)) < 0) {
             fprintf(stderr, "%s: %s\n", "accept error", strerror(errno));
             continue;
         }
 
-        read_request(connfd, request, headers);
-        if (*request && *headers) {
-            parse_request(connfd, request, headers, host, port);
-        }
 
-        if (*host && *port) {
-            if ((clientfd = open_clientfd(host, port)) < 0) {
-                fprintf(stderr, "%s: %s\n", "open_clientfd error", strerror(errno));
-                close(connfd);
-                continue;
-            }
-            content_length = serve_client(clientfd, request, headers, &content);
-            forward_response(connfd, headers, &content, content_length);
-        }
-
-        close(connfd);
+        pthread_create(&tid, NULL, thread, (void*)connfdp);
     }
 
     return 0; 
+}
+
+
+void*
+thread(void *vargp)
+{
+    int connfd = *((int*)vargp), clientfd;
+    pthread_detach(pthread_self());
+    free(vargp);
+    
+    char request[MAXLINE], headers[MAXLINE], host[MAXLINE], port[MAXLINE];
+    char *content;
+    int content_length;
+    read_request(connfd, request, headers);
+    if (*request && *headers) {
+        parse_request(connfd, request, headers, host, port);
+    }
+
+    if (*host && *port) {
+        if ((clientfd = open_clientfd(host, port)) < 0) {
+            fprintf(stderr, "%s: %s\n", "open_clientfd error", strerror(errno));
+            close(connfd);
+            return NULL;
+            
+        }
+        content_length = serve_client(clientfd, request, headers, &content);
+        forward_response(connfd, headers, &content, content_length);
+    }
+
+    close(connfd);
+    return NULL;
 }
 
 void

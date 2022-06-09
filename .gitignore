@@ -4,6 +4,7 @@ driver.sh
 README
 .proxy
 .noproxy
+tiny/
 .vimspector.json
 .vim
 .clangd
