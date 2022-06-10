@@ -1,7 +1,6 @@
-#ifndef LIB_h
-#define LIB_h
+#ifndef RIO_h
+#define RIO_h
     
-#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -24,26 +23,18 @@ typedef struct {
     int rio_cnt;               /* Unread bytes in internal buf */
     char *rio_bufptr;          /* Next unread byte in internal buf */
     char rio_buf[RIO_BUFSIZE]; /* Internal buffer */
-} rio_t;
+} Rio;
 /* $end rio_t */
 
 /* External variables */
 extern int h_errno;    /* Defined by BIND for DNS errors */ 
 extern char **environ; /* Defined by libc */
 
-/* Misc constants */
-#define	MAXLINE	 8192  /* Max text line length */
-#define MAXBUF   8192  /* Max I/O buffer size */
-#define LISTENQ  1024  /* Second argument to listen() */
-
 /* Rio (Robust I/O) package */
 ssize_t rio_readn(int fd, void *usrbuf, size_t n);
 ssize_t rio_writen(int fd, void *usrbuf, size_t n);
-void rio_readinitb(rio_t *rp, int fd); 
-ssize_t	rio_readnb(rio_t *rp, void *usrbuf, size_t n);
-ssize_t	rio_readlineb(rio_t *rp, void *usrbuf, size_t maxlen);
-
-int open_clientfd(char* hostname, char* port);
-int open_listenfd(char* port);
+void rio_readinitb(Rio *rp, int fd); 
+ssize_t	rio_readnb(Rio *rp, void *usrbuf, size_t n);
+ssize_t	rio_readlineb(Rio *rp, void *usrbuf, size_t maxlen);
 
 #endif

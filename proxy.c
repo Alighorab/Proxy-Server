@@ -1,16 +1,19 @@
-#include "lib.h"
-#include <pthread.h>
-#include <stdlib.h>
-#include <string.h>
+#define _GNU_SOURCE
+#include "sock_interface/sock_interface.h"
+#include "rio/rio.h"
+#include "cache/cache.h"
 
 void* thread(void *vargp);
 void read_request(int connfd, char *request, char *headers);
 void parse_request(int connfd, char *request, char *headers, 
         char *host, char *port);
-void read_requesthdrs(rio_t *rp, char *request_headers);
+void read_requesthdrs(Rio *rp, char *request_headers);
 void parse_uri(char *uri, char *hostname, char *port, char* request);
 int serve_client(int connfd, char *request, char *headers, char **content);
-void forward_response(int listenfd, char *headers, char **content, int content_length);
+void forward_response(int listenfd, char *headers, 
+        char *content, int content_length);
+
+static Cache cache;
 
 int
 main(int argc, char* argv[])
@@ -32,6 +35,7 @@ main(int argc, char* argv[])
 
     /* Ignore SIGPIPE signal if trying to write to a closed socket */
     signal(SIGPIPE, SIG_IGN); 
+    cache_init(&cache);
 
     while (1) {
         clientlen = sizeof(struct sockaddr_storage);
@@ -41,7 +45,6 @@ main(int argc, char* argv[])
             fprintf(stderr, "%s: %s\n", "accept error", strerror(errno));
             continue;
         }
-
 
         pthread_create(&tid, NULL, thread, (void*)connfdp);
     }
@@ -57,23 +60,32 @@ thread(void *vargp)
     pthread_detach(pthread_self());
     free(vargp);
     
+    char buf[MAXLINE];
     char request[MAXLINE], headers[MAXLINE], host[MAXLINE], port[MAXLINE];
-    char *content;
-    int content_length;
-    read_request(connfd, request, headers);
-    if (*request && *headers) {
-        parse_request(connfd, request, headers, host, port);
-    }
+    char *content, *respone_hdrs;
+    ssize_t content_length;
 
-    if (*host && *port) {
-        if ((clientfd = open_clientfd(host, port)) < 0) {
-            fprintf(stderr, "%s: %s\n", "open_clientfd error", strerror(errno));
-            close(connfd);
-            return NULL;
-            
+    read_request(connfd, request, headers);
+
+    if (*request && *headers) {
+        content_length = cache_read(&cache, request, &respone_hdrs, &content);
+        if (content_length < 0) {
+            strcpy(buf, request);
+            parse_request(connfd, request, headers, host, port);
+
+            if (*host && *port) {
+                if ((clientfd = open_clientfd(host, port)) < 0) {
+                    close(connfd);
+                    return NULL;
+                }
+                content_length = serve_client(clientfd, request, headers, &content);
+                forward_response(connfd, headers, content, content_length);
+                cache_write(&cache, buf, headers, content, content_length);
+                free(content);
+            }
+        } else {
+            forward_response(connfd, respone_hdrs, content, content_length);
         }
-        content_length = serve_client(clientfd, request, headers, &content);
-        forward_response(connfd, headers, &content, content_length);
     }
 
     close(connfd);
@@ -83,16 +95,15 @@ thread(void *vargp)
 void
 read_request(int connfd, char *request, char *headers)
 {
-    rio_t rio;
+    Rio rio;
 
     rio_readinitb(&rio, connfd);
     rio_readlineb(&rio, request, MAXLINE);
     read_requesthdrs(&rio, headers);
-
 }
 
 void
-read_requesthdrs(rio_t *rp, char *request_headers)
+read_requesthdrs(Rio *rp, char *request_headers)
 {
     char buf[MAXLINE];
 
@@ -102,8 +113,6 @@ read_requesthdrs(rio_t *rp, char *request_headers)
         rio_readlineb(rp, buf, MAXLINE);
         sprintf(request_headers, "%s%s", request_headers, buf);
     }
-
-    return;
 }
 
 void
@@ -126,6 +135,7 @@ parse_request(int connfd, char *request, char *headers,
     parse_uri(uri, host, port, path);
     sprintf(request, "%s %s %s\r\n", method, path, version);
 
+    /* Build request headers */
     sprintf(buf, "Proxy-Connection: close\r\n");
     if ((ptr = strcasestr(headers, "connection: "))) {
         sprintf(buf, "%sConnection: close\r\n", buf);
@@ -138,6 +148,7 @@ parse_request(int connfd, char *request, char *headers,
         sprintf(buf, "%sUser-Agent: %s", buf, 
                 "Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3\r\n");
     }
+    /* Concatenate client headers with proxy headers */
     strcat(buf, headers);
     strcpy(headers, buf);
 
@@ -191,36 +202,38 @@ parse_uri(char *uri, char *hostname, char *port, char* path)
     }
 
     strcpy(path, ptr); /* Copy path */
-
 }
 
 
 int
 serve_client(int clientfd, char *request, char *headers, char **content)
 {
-    rio_t rio;
+    Rio rio;
     char buf[MAXLINE], *ptr;
     int content_length = 0;
 
-    strcat(request, headers);
-    rio_writen(clientfd, request, strlen(request));
-
     rio_readinitb(&rio, clientfd);
+    /* Send request and headers to server */
+    rio_writen(clientfd, request, strlen(request));
+    rio_writen(clientfd, headers, strlen(headers));
 
+    /* Read response headers from server */
     rio_readlineb(&rio, buf, MAXLINE);
     sprintf(headers, "%s", buf);
     while (strcmp(buf, "\r\n")) {
         rio_readlineb(&rio, buf, MAXLINE);
         sprintf(headers, "%s%s", headers, buf);
     }
+
     printf("Response headers:\r\n");
     printf("%s", headers);
 
+    /* Get the content length */
     if ((ptr = strcasestr(headers, "content-length: "))) {
         strcpy(buf, ptr);
         ptr = index(buf, '\r');
         *ptr = '\0';
-        ptr = index(buf, ' ');
+        ptr = index(buf, ' ') + 1;
 
         if ((content_length = atoi(ptr)) > 0) {
             *content = malloc(content_length);
@@ -232,11 +245,10 @@ serve_client(int clientfd, char *request, char *headers, char **content)
 }
 
 void
-forward_response(int connfd, char *headers, char **content, int content_length)
+forward_response(int connfd, char *headers, char *content, int content_length)
 {
     rio_writen(connfd, headers, strlen(headers));
     if (content_length != 0) {
-        rio_writen(connfd, *content, content_length);
-        free(*content);
+        rio_writen(connfd, content, content_length);
     }
 }

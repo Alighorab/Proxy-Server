@@ -11,14 +11,26 @@ EXCLUDED_CFLAGS = -Wno-format-overflow -Wno-restrict
 
 all: proxy
 
-lib.o: lib.c lib.h
-	$(CC) $(CFLAGS) -c lib.c
+rio.o: rio/rio.c rio/rio.h
+	$(CC) $(CFLAGS) -c rio/rio.c
 
-proxy.o: proxy.c lib.h
+sock_interface.o: sock_interface/sock_interface.c sock_interface/sock_interface.h
+	$(CC) $(CFLAGS) -c sock_interface/sock_interface.c
+
+memlib.o: cache/memlib.c cache/memlib.h
+	$(CC) $(CFLAGS) -c cache/memlib.c
+
+mm.o: cache/mm.c cache/mm.h
+	$(CC) $(CFLAGS) -c cache/mm.c
+
+cache.o: cache/cache.c cache/cache.h
+	$(CC) $(CFLAGS) -c cache/cache.c
+
+proxy.o: proxy.c
 	$(CC) $(CFLAGS) $(EXCLUDED_CFLAGS) -c proxy.c
 
-proxy: proxy.o lib.o
-	$(CC) $(CFLAGS) $(EXCLUDED_CFLAGS) proxy.o lib.o -o proxy $(LDFLAGS)
+proxy: rio.o sock_interface.o memlib.o mm.o cache.o proxy.o
+	$(CC) $(CFLAGS) $(EXCLUDED_CFLAGS) rio.o sock_interface.o cache.o memlib.o mm.o proxy.o -o $@ $(LDFLAGS)
 
 clean:
 	rm -f *~ *.o proxy core *.tar *.zip *.gzip *.bzip *.gz
