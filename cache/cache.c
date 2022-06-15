@@ -66,29 +66,30 @@ void
 cache_write(CachePtr cp, char *request,
         char *response_hdrs, char *content, size_t content_length)
 {
+    if (content_length > MAX_OBJECT_SIZE) {
+        return;
+    }
     int idx;
     unsigned long long tag = generate_tag(request);
     char *response_hdrs_ptr = mm_malloc(strlen(response_hdrs));
     char *content_ptr = mm_malloc(content_length);
-    if (content_length <= MAX_OBJECT_SIZE) {
-        sem_wait(&cp->write_mutex);
+    sem_wait(&cp->write_mutex);
 
-        idx = find_empty_line(cp);
+    idx = find_empty_line(cp);
 
-        cp->cache_set[idx].valid = 1;
-        cp->cache_set[idx].tag = tag;
-        cp->cache_set[idx].content_length = content_length;
-        cp->cache_set[idx].response_hdr = response_hdrs_ptr;
-        strcpy(cp->cache_set[idx].response_hdr, response_hdrs);
-        cp->cache_set[idx].content = content_ptr;
-        memcpy(cp->cache_set[idx].content, content, content_length);
+    cp->cache_set[idx].valid = 1;
+    cp->cache_set[idx].tag = tag;
+    cp->cache_set[idx].content_length = content_length;
+    cp->cache_set[idx].response_hdr = response_hdrs_ptr;
+    strcpy(cp->cache_set[idx].response_hdr, response_hdrs);
+    cp->cache_set[idx].content = content_ptr;
+    memcpy(cp->cache_set[idx].content, content, content_length);
 
-        sem_wait(&time_mutex);
-        cp->cache_set[idx].time = time++;
-        sem_post(&time_mutex);
+    sem_wait(&time_mutex);
+    cp->cache_set[idx].time = time++;
+    sem_post(&time_mutex);
 
-        sem_post(&cp->write_mutex);
-    }
+    sem_post(&cp->write_mutex);
 }
 
 
