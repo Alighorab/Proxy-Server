@@ -5,6 +5,7 @@
 
 void* thread(void *vargp);
 void read_request(int connfd, char *request, char *headers);
+void append_version(char *request);
 void parse_request(int connfd, char *request, char *headers, 
         char *host, char *port);
 void read_requesthdrs(Rio *rp, char *request_headers);
@@ -66,26 +67,23 @@ thread(void *vargp)
     ssize_t content_length;
 
     read_request(connfd, request, headers);
+    append_version(request);
 
-    if (*request && *headers) {
-        content_length = cache_read(&cache, request, &respone_hdrs, &content);
-        if (content_length < 0) {
-            strcpy(buf, request);
-            parse_request(connfd, request, headers, host, port);
+    content_length = cache_read(&cache, request, &respone_hdrs, &content);
+    if (content_length < 0) {
+        strcpy(buf, request);
+        parse_request(connfd, request, headers, host, port);
 
-            if (*host && *port) {
-                if ((clientfd = open_clientfd(host, port)) < 0) {
-                    close(connfd);
-                    return NULL;
-                }
-                content_length = serve_client(clientfd, request, headers, &content);
-                forward_response(connfd, headers, content, content_length);
-                cache_write(&cache, buf, headers, content, content_length);
-                free(content);
-            }
-        } else {
-            forward_response(connfd, respone_hdrs, content, content_length);
+        if ((clientfd = open_clientfd(host, port)) < 0) {
+            close(connfd);
+            return NULL;
         }
+        content_length = serve_client(clientfd, request, headers, &content);
+        forward_response(connfd, headers, content, content_length);
+        cache_write(&cache, buf, headers, content, content_length);
+        free(content);
+    } else {
+        forward_response(connfd, respone_hdrs, content, content_length);
     }
 
     close(connfd);
@@ -113,6 +111,19 @@ read_requesthdrs(Rio *rp, char *request_headers)
         rio_readlineb(rp, buf, MAXLINE);
         sprintf(request_headers, "%s%s", request_headers, buf);
     }
+}
+
+
+void
+append_version(char *request)
+{
+    char method[MAXLINE], uri[MAXLINE], version[MAXLINE];
+    sscanf(request, "%s %s %s", method, uri, version);
+
+    if (strcasecmp(version, "HTTP/1.0")) {
+        sprintf(request, "%s %s %s\r\n", method, uri, "HTTP/1.0");
+    }
+
 }
 
 void
