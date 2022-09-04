@@ -40,10 +40,15 @@ telnet localhost <port>
 - Or adjust your browser to content to proxy and content to http sites.
 - **NOTE**: use these sites and what is similar to them only:
 ````
-http://www.example.com
-http://go.com
-http://www.washington.edu
-http://www.internic.com
+http://www.example.com/
+http://go.com/
+http://www.washington.edu/
+http://www.internic.com/
+http://eu.httpbin.org/
+http://neverssl.com/
+http://info.cern.ch/
+http://www.softwareqatest.com/
+http://www.vulnweb.com/
 `````
 
 ### Poject Files
