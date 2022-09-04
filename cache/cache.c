@@ -66,7 +66,10 @@ void
 cache_write(CachePtr cp, char *request,
         char *response_hdrs, char *content, size_t content_length)
 {
-    if (content_length > MAX_OBJECT_SIZE) {
+    size_t len = content_length + strlen(response_hdrs);
+    if (content_length > MAX_OBJECT_SIZE || 
+            (cache_size(cp) + len) >= MAX_CACHE_SIZE) {
+        /* TO-DO: Remove element from cache */
         return;
     }
     int idx;
@@ -92,6 +95,11 @@ cache_write(CachePtr cp, char *request,
     sem_post(&cp->write_mutex);
 }
 
+size_t
+cache_size(CachePtr cp)
+{
+    return mm_size();
+}
 
 static unsigned long long
 generate_tag(const char *request)

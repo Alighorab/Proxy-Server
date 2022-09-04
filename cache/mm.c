@@ -111,6 +111,7 @@ mm_malloc(size_t size)
         }
     }
     place(bp, asize);
+    // printf("Using %.2f%% of Cache..\r\n", (float)mem_heapsize()/MAX_HEAP * 100);
 
     return bp;
 }
@@ -166,6 +167,16 @@ mm_realloc(void *ptr, size_t size)
     mm_free(ptr);
 
     return newptr;
+}
+
+
+/* 
+ * mm_size - Return heap size
+ */
+size_t
+mm_size(void)
+{
+    return mem_heapsize();
 }
 
 /*

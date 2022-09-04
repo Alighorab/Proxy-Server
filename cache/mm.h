@@ -7,5 +7,6 @@ int mm_init (void);
 void *mm_malloc (size_t size);
 void mm_free (void *ptr);
 void *mm_realloc(void *ptr, size_t size);
+size_t mm_size(void);
 
 #endif

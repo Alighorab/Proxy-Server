@@ -34,4 +34,5 @@ ssize_t cache_read(CachePtr cp, char *request,
 void cache_write(CachePtr cp, char *request,
         char *response_hdrs, char *content, size_t content_length);
 
+size_t cache_size(CachePtr cp);
 #endif
