@@ -1,6 +1,4 @@
 .cache
-nop-server.py
-driver.sh
 README
 .proxy
 .noproxy

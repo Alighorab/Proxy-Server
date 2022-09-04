@@ -50,6 +50,22 @@ http://info.cern.ch/
 http://www.softwareqatest.com/
 http://www.vulnweb.com/
 `````
+3. Use `driver.sh`
+    - `driver.sh` tests `proxy` 
+        using [tiny](https://github.com/Alighorab/Tiny-Web-Server.git)
+````
+pushd .. &> /dev/null
+git clone https://github.com/Alighorab/Tiny-Web-Server/
+mv Tiny-Web-Server/ Proxy-Server/tiny/
+popd &> /dev/null
+./driver.sh
+````
+
+4. Use `sdriver.sh`
+    - `sdriver.sh` tests `proxy` using the above sites
+````
+./sdriver.sh
+````
 
 ### Poject Files
 ````
@@ -61,6 +77,9 @@ http://www.vulnweb.com/
 │  └── rio.{c,h}: robust I/O package.
 ├── sock_interface
 │  └── sock_interface.{c,h}: socket interface package.
-├── Makefile
 ├── proxy.c: proxy implementation.
-└── proxylab.pdf: proxy writeup.
+├── Makefile
+├── proxylab.pdf: proxy writeup.
+├── driver.sh: The autograder for Basic, Concurrency, and Cache using tiny
+├── nop-server.py: helper for the autograder.         
+└── sdriver.sh: The autograder for Basic, Concurrency, and Cache using http sites
