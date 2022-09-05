@@ -11,7 +11,7 @@ MAX_CACHE=15
 HOME_DIR=`pwd`
 PROXY_DIR="./.proxy"
 NOPROXY_DIR="./.noproxy"
-TIMEOUT=0.1
+TIMEOUT=0.1 # short enough to make sure it's cached
 MAX_RAND=63000
 PORT_START=1024
 PORT_MAX=65000
@@ -56,7 +56,7 @@ FETCH_URL="http://go.com/"
 function download_proxy {
     cd $1
     curl --silent --proxy $4 --output $2 $3
-    (( $? == 28 )) && echo "Error: Fetch timed out after ${TIMEOUT} seconds"
+    (( $? == 28 )) && echo -e "Error: Fetch timed out after ${TIMEOUT} seconds"
     # cat $2
     cd $HOME_DIR
 }
@@ -69,7 +69,7 @@ function download_proxy {
 function download_proxy_timeout {
     cd $1
     curl --max-time ${TIMEOUT} --silent --proxy $4 --output $2 $3
-    (( $? == 28 )) && echo "Error: Fetch timed out after ${TIMEOUT} seconds"
+    (( $? == 28 )) && echo -e "Error: Fetch timed out after ${TIMEOUT} seconds"
     # cat $2
     cd $HOME_DIR
 }
@@ -81,7 +81,7 @@ function download_proxy_timeout {
 function download_noproxy {
     cd $1
     curl --silent --output $2 $3 
-    (( $? == 28 )) && echo "Error: Fetch timed out after ${TIMEOUT} seconds"
+    (( $? == 28 )) && echo -e "Error: Fetch timed out after ${TIMEOUT} seconds"
     # cat $2
     cd $HOME_DIR
 }
@@ -112,7 +112,7 @@ function wait_for_port_use() {
         | grep tcp | cut -c21- | cut -d':' -f2 | cut -d' ' -f1 \
         | grep -E "[0-9]+" | uniq | tr "\n" " "`
 
-    echo "${portsinuse}" | grep -wq "${1}"
+    echo -e "${portsinuse}" | grep -wq "${1}"
     while [ "$?" != "0" ]
     do
         timeout_count=`expr ${timeout_count} + 1`
@@ -124,7 +124,7 @@ function wait_for_port_use() {
         portsinuse=`netstat --numeric-ports --numeric-hosts -a --protocol=tcpip \
             | grep tcp | cut -c21- | cut -d':' -f2 | cut -d' ' -f1 \
             | grep -E "[0-9]+" | uniq | tr "\n" " "`
-        echo "${portsinuse}" | grep -wq "${1}"
+        echo -e "${portsinuse}" | grep -wq "${1}"
     done
 }
 
@@ -144,16 +144,16 @@ function free_port {
             | grep tcp | cut -c21- | cut -d':' -f2 | cut -d' ' -f1 \
             | grep -E "[0-9]+" | uniq | tr "\n" " "`
 
-        echo "${portsinuse}" | grep -wq "${port}"
+        echo -e "${portsinuse}" | grep -wq "${port}"
         if [ "$?" == "0" ]; then
             if [ $port -eq ${PORT_MAX} ]
             then
-                echo "-1"
+                echo -e "-1"
                 return
             fi
             port=`expr ${port} + 1`
         else
-            echo "${port}"
+            echo -e "${port}"
             return
         fi
     done
@@ -175,14 +175,14 @@ killall -q proxy nop-server.py 2> /dev/null
 # Make sure we have an existing executable proxy
 if [ ! -x ./proxy ]
 then 
-    echo "Error: ./proxy not found or not an executable file. Please rebuild your proxy and try again."
+    echo -e "Error: ./proxy not found or not an executable file. Please rebuild your proxy and try again."
     exit
 fi
 
 # Make sure we have an existing executable nop-server.py file
 if [ ! -x ./nop-server.py ]
 then 
-    echo "Error: ./nop-server.py not found or not an executable file."
+    echo -e "Error: ./nop-server.py not found or not an executable file."
     exit
 fi
 
@@ -198,17 +198,17 @@ then
 fi
 
 # Add a handler to generate a meaningful timeout message
-trap 'echo "Timeout waiting for the server to grab the port reserved for it"; kill $$' ALRM
+trap 'echo -e "Timeout waiting for the server to grab the port reserved for it"; kill $$' ALRM
 
 
 #####
 # Basic
 #
-echo "*** Basic ***"
+echo -e "*** Basic ***"
 
 # Run the proxy
 proxy_port=$(free_port)
-echo "Starting proxy on ${proxy_port}"
+echo -e "Starting proxy on ${proxy_port}"
 ./proxy ${proxy_port}  &> /dev/null &
 proxy_pid=$!
 
@@ -222,51 +222,51 @@ numRun=0
 numSucceeded=0
 for url in ${BASIC_LIST}
 do
-    file=$(echo $url | sed -e 's/[^/]*\/\/\([^@]*@\)\?\([^:/]*\).*/\2/').html
+    file=$(echo -e $url | sed -e 's/[^/]*\/\/\([^@]*@\)\?\([^:/]*\).*/\2/').html
     numRun=`expr $numRun + 1`
-    echo "${numRun}: ${file}"
+    echo -e "${numRun}: ${file}"
     clear_dirs
 
     # Fetch using the proxy
-    echo "   Fetching from ${url} into ${PROXY_DIR} using the proxy"
+    echo -e "   Fetching from \e[1;31m${url}\e[1;0m into ${PROXY_DIR} using the proxy"
     download_proxy $PROXY_DIR ${file} "${url}" "http://localhost:${proxy_port}"
 
     # Fetch directly from server
-    echo "   Fetching from ${url} into ${NOPROXY_DIR} directly from server"
+    echo -e "   Fetching from \e[1;31m${url}\e[1;0m into ${NOPROXY_DIR} directly from server"
     download_noproxy $NOPROXY_DIR ${file} "${url}"
 
     # Compare the two files
-    echo "   Comparing the two files"
+    echo -e "   Comparing the two files"
     diff -q ${PROXY_DIR}/${file} ${NOPROXY_DIR}/${file} &> /dev/null
     if [ $? -eq 0 ]; then
         numSucceeded=`expr ${numSucceeded} + 1`
-        echo "   Success: Files are identical."
+        echo -e "   \e[1;32mSuccess\e[1;0m: Files are identical."
     else
-        echo "   Failure: Files differ."
+        echo -e "   \e[1;31mFailure\e[1;0m: Files differ."
     fi
 done
 
 
-echo
-echo "Killing proxy"
+echo -e
+echo -e "Killing proxy"
 kill $proxy_pid 2> /dev/null
 wait $proxy_pid 2> /dev/null
 
 basicScore=`expr ${MAX_BASIC} \* ${numSucceeded} / ${numRun}`
 
-echo "basicScore: $basicScore/${MAX_BASIC}"
+echo -e "basicScore: $basicScore/${MAX_BASIC}"
 
 
 ######
 # Concurrency
 #
 
-echo ""
-echo "*** Concurrency ***"
+echo -e ""
+echo -e "*** Concurrency ***"
 
 # Run the proxy
 proxy_port=$(free_port)
-echo "Starting proxy on port ${proxy_port}"
+echo -e "Starting proxy on port ${proxy_port}"
 ./proxy ${proxy_port} &> /dev/null &
 proxy_pid=$!
 
@@ -275,7 +275,7 @@ wait_for_port_use "${proxy_port}"
 
 # Run a special blocking nop-server that never responds to requests
 nop_port=$(free_port)
-echo "Starting the blocking NOP server on port ${nop_port}"
+echo -e "Starting the blocking NOP server on port ${nop_port}"
 python3 ./nop-server.py ${nop_port} &> /dev/null &
 nop_pid=$!
 
@@ -285,48 +285,48 @@ wait_for_port_use "${nop_port}"
 
 # Try to fetch a file from the blocking nop-server using the proxy
 clear_dirs
-echo "Trying to fetch a file from the blocking nop-server"
+echo -e "Trying to fetch a file from the blocking nop-server"
 download_proxy $PROXY_DIR "nop-file.txt" "http://localhost:${nop_port}/nop-file.txt" "http://localhost:${proxy_port}" &
 
 # Fetch directly from server
-echo "   Fetching from ${FETCH_URL} into ${NOPROXY_DIR} directly from server"
+echo -e "   Fetching from \e[1;31m${FETCH_URL}\e[1;0m into ${NOPROXY_DIR} directly from server"
 download_noproxy $NOPROXY_DIR ${FETCH_FILE} "${FETCH_URL}"
 
 # Fetch using the proxy
-echo "   Fetching from ${FETCH_URL} into ${PROXY_DIR} using the proxy"
+echo -e "   Fetching from \e[1;31m${FETCH_URL}\e[1;0m  into ${PROXY_DIR} using the proxy"
 download_proxy $PROXY_DIR ${FETCH_FILE} "${FETCH_URL}" "http://localhost:${proxy_port}"
 
 # See if the proxy fetch succeeded
-echo "Checking whether the proxy fetch succeeded"
+echo -e "Checking whether the proxy fetch succeeded"
 diff -q ${PROXY_DIR}/${FETCH_FILE} ${NOPROXY_DIR}/${FETCH_FILE} &> /dev/null
 if [ $? -eq 0 ]; then
     concurrencyScore=${MAX_CONCURRENCY}
-    echo "Success: Was able to fetch tiny/${FETCH_FILE} from the proxy."
+    echo -e "\e[1;32mSuccess\e[1;0m: Was able to fetch tiny/${FETCH_FILE} from the proxy."
 else
     concurrencyScore=0
-    echo "Failure: Was not able to fetch tiny/${FETCH_FILE} from the proxy."
+    echo -e "\e[1;31mFailure\e[1;0m: Was not able to fetch tiny/${FETCH_FILE} from the proxy."
 fi
 
 # Clean up
-echo "Killing proxy and nop-server"
+echo -e "Killing proxy and nop-server"
 kill $proxy_pid 2> /dev/null
 wait $proxy_pid 2> /dev/null
 kill $nop_pid 2> /dev/null
 wait $nop_pid 2> /dev/null
 
-echo "concurrencyScore: $concurrencyScore/${MAX_CONCURRENCY}"
+echo -e "concurrencyScore: $concurrencyScore/${MAX_CONCURRENCY}"
 
 
 #####
 # Caching
 #
-echo ""
-echo "*** Cache ***"
+echo -e ""
+echo -e "*** Cache ***"
 
 
 # Run the proxy
 proxy_port=$(free_port)
-echo "Starting proxy on port ${proxy_port}"
+echo -e "Starting proxy on port ${proxy_port}"
 ./proxy ${proxy_port} &> /dev/null &
 proxy_pid=$!
 
@@ -340,52 +340,52 @@ numSucceeded=0
 clear_dirs
 for url in ${CACHE_LIST}
 do
-    file=$(echo $url | sed -e 's/[^/]*\/\/\([^@]*@\)\?\([^:/]*\).*/\2/').html
+    file=$(echo -e $url | sed -e 's/[^/]*\/\/\([^@]*@\)\?\([^:/]*\).*/\2/').html
     numRun=`expr $numRun + 1`
-    echo "${numRun}: ${file}"
+    echo -e "${numRun}: ${file}"
 
     # Fetch using the proxy
-    echo "   Fetching from ${url} into ${PROXY_DIR} using the proxy"
+    echo -e "   Fetching from \e[1;31m${url}\e[1;0m into ${PROXY_DIR} using the proxy"
     download_proxy $PROXY_DIR ${file} "${url}" "http://localhost:${proxy_port}"
 done
 
-echo
+echo -e
 numRun=0
 numSucceeded=0
 for url in ${CACHE_LIST}
 do
-    file=$(echo $url | sed -e 's/[^/]*\/\/\([^@]*@\)\?\([^:/]*\).*/\2/').html
+    file=$(echo -e $url | sed -e 's/[^/]*\/\/\([^@]*@\)\?\([^:/]*\).*/\2/').html
     numRun=`expr $numRun + 1`
-    echo "${numRun}: ${file}"
+    echo -e "${numRun}: ${file}"
     clear_noproxy_dir
 
     # Fetch directly from server
-    echo "   Fetching a cached copy of ${file} into ${NOPROXY_DIR}"
+    echo -e "   Fetching a cached copy of ${file} into ${NOPROXY_DIR}"
     download_proxy_timeout $NOPROXY_DIR ${file} "${url}" "http://localhost:${proxy_port}"
 
     # Compare the two files
-    echo "   Comparing the two files"
+    echo -e "   Comparing the two files"
     diff -q ${PROXY_DIR}/${file} ${NOPROXY_DIR}/${file} &> /dev/null
     if [ $? -eq 0 ]; then
         numSucceeded=`expr ${numSucceeded} + 1`
-        echo "   Success: Files are identical."
+        echo -e "   \e[1;32mSuccess\e[1;0m: Files are identical."
     else
-        echo "   Failure: Files differ."
+        echo -e "   \e[1;31mFailure\e[1;0m: Files differ."
     fi
 done
 
 cacheScore=`expr ${MAX_CACHE} \* ${numSucceeded} / ${numRun}`
 
 # Kill the proxy
-echo "Killing proxy"
+echo -e "Killing proxy"
 kill $proxy_pid 2> /dev/null
 wait $proxy_pid 2> /dev/null
 
-echo "cacheScore: $cacheScore/${MAX_CACHE}"
+echo -e "cacheScore: $cacheScore/${MAX_CACHE}"
 
 # Emit the total score
 totalScore=`expr ${basicScore} + ${cacheScore} + ${concurrencyScore}`
 maxScore=`expr ${MAX_BASIC} + ${MAX_CACHE} + ${MAX_CONCURRENCY}`
-echo ""
-echo "totalScore: ${totalScore}/${maxScore}"
+echo -e ""
+echo -e "totalScore: ${totalScore}/${maxScore}"
 exit
