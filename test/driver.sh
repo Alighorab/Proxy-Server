@@ -1,49 +1,79 @@
 #!/bin/bash
-
+#
+# driver.sh - This is a simple autograder for the Proxy Lab. It does
+#     basic sanity checks that determine whether or not the code
+#     behaves like a concurrent caching proxy. 
+#
+#     David O'Hallaron, Carnegie Mellon University
+#     updated: 2/8/2016
+# 
+#     usage: ./driver.sh
+# 
 
 # Point values
 MAX_BASIC=40
 MAX_CONCURRENCY=15
 MAX_CACHE=15
 
-
 # Various constants
 HOME_DIR=`pwd`
 PROXY_DIR="./.proxy"
 NOPROXY_DIR="./.noproxy"
-TIMEOUT=0.1 # short enough to make sure it's cached
+TIMEOUT=5
 MAX_RAND=63000
 PORT_START=1024
 PORT_MAX=65000
 MAX_PORT_TRIES=10
-
+CACHE_SIZE=`python3 -c "print(1049000/1024)"`
 
 # List of text and binary files for the basic test
-BASIC_LIST="http://www.example.com/
-            http://go.com/
-            http://www.washington.edu/
-            http://www.internic.com/
-            http://eu.httpbin.org/
-            http://neverssl.com/
-            http://info.cern.ch/
-            http://www.softwareqatest.com/
-            http://www.vulnweb.com/"
-
+BASIC_LIST="home.html
+            lib.c
+            tiny.c
+            godzilla.jpg
+            godzilla.gif
+            tiny
+            1.png
+            2.png
+            3.png
+            4.png
+            5.png
+            6.png
+            7.png
+            8.png
+            9.png
+           10.png
+           11.png
+           12.png
+           13.png
+           14.png
+           15.png
+           16.png"
 
 # List of text files for the cache test
-CACHE_LIST="http://www.example.com/
-            http://www.washington.edu/
-            http://www.internic.com/
-            http://eu.httpbin.org/
-            http://neverssl.com/
-            http://info.cern.ch/
-            http://www.softwareqatest.com/
-            http://www.vulnweb.com/"
-
+CACHE_LIST="tiny.c
+            home.html
+            lib.c
+            1.png
+            2.png
+            3.png
+            4.png
+            5.png
+            6.png
+            7.png
+            8.png
+            9.png
+           10.png
+           11.png
+           12.png
+           13.png
+           14.png
+           15.png
+           godzilla.jpg
+           godzilla.gif"
 
 # The file we will fetch for various tests
-FETCH_FILE="go.html"
-FETCH_URL="http://go.com/"
+FETCH_FILE="home.html"
 
 #####
 # Helper functions
@@ -54,19 +84,6 @@ FETCH_URL="http://go.com/"
 # usage: download_proxy <testdir> <filename> <origin_url> <proxy_url>
 #
 function download_proxy {
-    cd $1
-    curl --silent --proxy $4 --output $2 $3
-    (( $? == 28 )) && echo -e "Error: Fetch timed out after ${TIMEOUT} seconds"
-    # cat $2
-    cd $HOME_DIR
-}
-
-#
-# download_proxy_timeout - download a file from the origin server via the proxy
-#                           with timeout to test cache
-# usage: download_proxy <testdir> <filename> <origin_url> <proxy_url>
-#
-function download_proxy_timeout {
     cd $1
     curl --max-time ${TIMEOUT} --silent --proxy $4 --output $2 $3
     (( $? == 28 )) && echo -e "Error: Fetch timed out after ${TIMEOUT} seconds"
@@ -80,7 +97,7 @@ function download_proxy_timeout {
 #
 function download_noproxy {
     cd $1
-    curl --silent --output $2 $3 
+    curl --max-time ${TIMEOUT} --silent --output $2 $3 
     (( $? == 28 )) && echo -e "Error: Fetch timed out after ${TIMEOUT} seconds"
     # cat $2
     cd $HOME_DIR
@@ -169,8 +186,38 @@ function free_port {
 # permissions
 #
 
-# Kill any stray proxies
-killall -q proxy nop-server.py 2> /dev/null
+# Kill any stray proxies or tiny servers owned by this user
+killall -q proxy tiny test/nop-server.py 2> /dev/null
+
+# Make sure we have a Tiny directory
+if [ ! -d ./tiny ]
+then 
+    echo -e "Error: ./tiny directory not found."
+    exit
+fi
+
+# If there is no Tiny executable, then try to build it
+if [ ! -x ./tiny/tiny ]
+then 
+    echo -e "Building the tiny executable."
+    (cd ./tiny; make)
+    echo -e ""
+fi
+
+# Make sure we have all the Tiny files we need
+if [ ! -x ./tiny/tiny ]
+then 
+    echo -e "Error: ./tiny/tiny not found or not an executable file."
+    exit
+fi
+for file in ${BASIC_LIST}
+do
+    if [ ! -e ./tiny/${file} ]
+    then
+        echo -e "Error: ./tiny/${file} not found."
+        exit
+    fi
+done
 
 # Make sure we have an existing executable proxy
 if [ ! -x ./proxy ]
@@ -179,10 +226,10 @@ then
     exit
 fi
 
-# Make sure we have an existing executable nop-server.py file
-if [ ! -x ./nop-server.py ]
+# Make sure we have an existing executable test/nop-server.py file
+if [ ! -x ./test/nop-server.py ]
 then 
-    echo -e "Error: ./nop-server.py not found or not an executable file."
+    echo -e "Error: ./test/nop-server.py not found or not an executable file."
     exit
 fi
 
@@ -200,11 +247,21 @@ fi
 # Add a handler to generate a meaningful timeout message
 trap 'echo -e "Timeout waiting for the server to grab the port reserved for it"; kill $$' ALRM
 
-
 #####
 # Basic
 #
 echo -e "*** Basic ***"
+
+# Run the Tiny Web server
+tiny_port=$(free_port)
+echo -e "Starting tiny on ${tiny_port}"
+pushd ./tiny &> /dev/null
+./tiny ${tiny_port}   &> /dev/null  &
+tiny_pid=$!
+popd &> /dev/null
+
+# Wait for tiny to start in earnest
+wait_for_port_use "${tiny_port}"
 
 # Run the proxy
 proxy_port=$(free_port)
@@ -220,20 +277,19 @@ wait_for_port_use "${proxy_port}"
 # Tiny and via the proxy, and then comparing the results.
 numRun=0
 numSucceeded=0
-for url in ${BASIC_LIST}
+for file in ${BASIC_LIST}
 do
-    file=$(echo -e $url | sed -e 's/[^/]*\/\/\([^@]*@\)\?\([^:/]*\).*/\2/').html
     numRun=`expr $numRun + 1`
     echo -e "${numRun}: ${file}"
     clear_dirs
 
     # Fetch using the proxy
-    echo -e "   Fetching from \e[1;31m${url}\e[1;0m into ${PROXY_DIR} using the proxy"
-    download_proxy $PROXY_DIR ${file} "${url}" "http://localhost:${proxy_port}"
+    echo -e "   Fetching ./tiny/${file} into ${PROXY_DIR} using the proxy"
+    download_proxy $PROXY_DIR ${file} "http://localhost:${tiny_port}/${file}" "http://localhost:${proxy_port}"
 
-    # Fetch directly from server
-    echo -e "   Fetching from \e[1;31m${url}\e[1;0m into ${NOPROXY_DIR} directly from server"
-    download_noproxy $NOPROXY_DIR ${file} "${url}"
+    # Fetch directly from Tiny
+    echo -e "   Fetching ./tiny/${file} into ${NOPROXY_DIR} directly from Tiny"
+    download_noproxy $NOPROXY_DIR ${file} "http://localhost:${tiny_port}/${file}"
 
     # Compare the two files
     echo -e "   Comparing the two files"
@@ -246,9 +302,9 @@ do
     fi
 done
 
-
-echo -e
-echo -e "Killing proxy"
+echo -e "Killing tiny and proxy"
+kill $tiny_pid 2> /dev/null
+wait $tiny_pid 2> /dev/null
 kill $proxy_pid 2> /dev/null
 wait $proxy_pid 2> /dev/null
 
@@ -264,6 +320,17 @@ echo -e "basicScore: $basicScore/${MAX_BASIC}"
 echo -e ""
 echo -e "*** Concurrency ***"
 
+# Run the Tiny Web server
+tiny_port=$(free_port)
+echo -e "Starting tiny on port ${tiny_port}"
+cd ./tiny
+./tiny ${tiny_port} &> /dev/null &
+tiny_pid=$!
+cd ${HOME_DIR}
+
+# Wait for tiny to start in earnest
+wait_for_port_use "${tiny_port}"
+
 # Run the proxy
 proxy_port=$(free_port)
 echo -e "Starting proxy on port ${proxy_port}"
@@ -276,25 +343,24 @@ wait_for_port_use "${proxy_port}"
 # Run a special blocking nop-server that never responds to requests
 nop_port=$(free_port)
 echo -e "Starting the blocking NOP server on port ${nop_port}"
-python3 ./nop-server.py ${nop_port} &> /dev/null &
+python3 ./test/nop-server.py ${nop_port} &> /dev/null &
 nop_pid=$!
 
 # Wait for the nop server to start in earnest
 wait_for_port_use "${nop_port}"
-
 
 # Try to fetch a file from the blocking nop-server using the proxy
 clear_dirs
 echo -e "Trying to fetch a file from the blocking nop-server"
 download_proxy $PROXY_DIR "nop-file.txt" "http://localhost:${nop_port}/nop-file.txt" "http://localhost:${proxy_port}" &
 
-# Fetch directly from server
-echo -e "   Fetching from \e[1;31m${FETCH_URL}\e[1;0m into ${NOPROXY_DIR} directly from server"
-download_noproxy $NOPROXY_DIR ${FETCH_FILE} "${FETCH_URL}"
+# Fetch directly from Tiny
+echo -e "Fetching ./tiny/${FETCH_FILE} into ${NOPROXY_DIR} directly from Tiny"
+download_noproxy $NOPROXY_DIR ${FETCH_FILE} "http://localhost:${tiny_port}/${FETCH_FILE}"
 
 # Fetch using the proxy
-echo -e "   Fetching from \e[1;31m${FETCH_URL}\e[1;0m  into ${PROXY_DIR} using the proxy"
-download_proxy $PROXY_DIR ${FETCH_FILE} "${FETCH_URL}" "http://localhost:${proxy_port}"
+echo -e "Fetching ./tiny/${FETCH_FILE} into ${PROXY_DIR} using the proxy"
+download_proxy $PROXY_DIR ${FETCH_FILE} "http://localhost:${tiny_port}/${FETCH_FILE}" "http://localhost:${proxy_port}"
 
 # See if the proxy fetch succeeded
 echo -e "Checking whether the proxy fetch succeeded"
@@ -308,7 +374,9 @@ else
 fi
 
 # Clean up
-echo -e "Killing proxy and nop-server"
+echo -e "Killing tiny, proxy, and nop-server"
+kill $tiny_pid 2> /dev/null
+wait $tiny_pid 2> /dev/null
 kill $proxy_pid 2> /dev/null
 wait $proxy_pid 2> /dev/null
 kill $nop_pid 2> /dev/null
@@ -316,13 +384,22 @@ wait $nop_pid 2> /dev/null
 
 echo -e "concurrencyScore: $concurrencyScore/${MAX_CONCURRENCY}"
 
-
 #####
 # Caching
 #
 echo -e ""
 echo -e "*** Cache ***"
 
+# Run the Tiny Web server
+tiny_port=$(free_port)
+echo -e "Starting tiny on port ${tiny_port}"
+cd ./tiny
+./tiny ${tiny_port} &> /dev/null &
+tiny_pid=$!
+cd ${HOME_DIR}
+
+# Wait for tiny to start in earnest
+wait_for_port_use "${tiny_port}"
 
 # Run the proxy
 proxy_port=$(free_port)
@@ -333,46 +410,52 @@ proxy_pid=$!
 # Wait for the proxy to start in earnest
 wait_for_port_use "${proxy_port}"
 
-# Now do the test by fetching some text and binary files directly from
-# Tiny and via the proxy, and then comparing the results.
-numRun=0
-numSucceeded=0
+# Fetch some files from tiny using the proxy
 clear_dirs
-for url in ${CACHE_LIST}
+for file in ${CACHE_LIST}
 do
-    file=$(echo -e $url | sed -e 's/[^/]*\/\/\([^@]*@\)\?\([^:/]*\).*/\2/').html
-    numRun=`expr $numRun + 1`
-    echo -e "${numRun}: ${file}"
-
-    # Fetch using the proxy
-    echo -e "   Fetching from \e[1;31m${url}\e[1;0m into ${PROXY_DIR} using the proxy"
-    download_proxy $PROXY_DIR ${file} "${url}" "http://localhost:${proxy_port}"
+    echo -e "Fetching ./tiny/${file} into ${PROXY_DIR} using the proxy"
+    download_proxy $PROXY_DIR ${file} "http://localhost:${tiny_port}/${file}" "http://localhost:${proxy_port}"
 done
 
-echo -e
+# Kill Tiny
+echo -e "Killing tiny"
+kill $tiny_pid 2> /dev/null
+wait $tiny_pid 2> /dev/null
+
 numRun=0
 numSucceeded=0
-for url in ${CACHE_LIST}
+accumulatedSize=0
+fileSize=0
+echo -e
+# Now try to fetch a cached copy of the fetched files.
+for file in ${CACHE_LIST}
 do
-    file=$(echo -e $url | sed -e 's/[^/]*\/\/\([^@]*@\)\?\([^:/]*\).*/\2/').html
     numRun=`expr $numRun + 1`
     echo -e "${numRun}: ${file}"
     clear_noproxy_dir
 
-    # Fetch directly from server
-    echo -e "   Fetching a cached copy of ${file} into ${NOPROXY_DIR}"
-    download_proxy_timeout $NOPROXY_DIR ${file} "${url}" "http://localhost:${proxy_port}"
-
-    # Compare the two files
-    echo -e "   Comparing the two files"
-    diff -q ${PROXY_DIR}/${file} ${NOPROXY_DIR}/${file} &> /dev/null
+    echo -e "Fetching a cached copy of ${file} into ${NOPROXY_DIR}"
+    download_proxy $NOPROXY_DIR ${file} "http://localhost:${tiny_port}/${file}" "http://localhost:${proxy_port}"
+    # See if the proxy fetch succeeded by comparing it with the original
+    # file in the tiny directory
+    diff -q ./tiny/${file} ${NOPROXY_DIR}/${file}  &> /dev/null
     if [ $? -eq 0 ]; then
+        fileSize=`expr $(ls -l ${NOPROXY_DIR}/${file} | cut -d' ' -f5)`
+        accumulatedSize=`python3 -c "print(${accumulatedSize} + ${fileSize})"`
+        fileSize=`python3 -c "print(${fileSize}/1024)"`
         numSucceeded=`expr ${numSucceeded} + 1`
+        printf  "   File Size: %.2fk\n" "${fileSize}"
         echo -e "   \e[1;32mSuccess\e[1;0m: Files are identical."
     else
         echo -e "   \e[1;31mFailure\e[1;0m: Files differ."
     fi
 done
+
+echo
+printf "accumulatedSize: %.2fk\n" "`python3 -c "print(${accumulatedSize}/1024)"`"
+printf "cacheSize: %.2fk\n" "${CACHE_SIZE}"
+echo
 
 cacheScore=`expr ${MAX_CACHE} \* ${numSucceeded} / ${numRun}`
 

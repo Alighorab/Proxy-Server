@@ -1,23 +1,23 @@
 #define _GNU_SOURCE
-#include "sock_interface/sock_interface.h"
-#include "rio/rio.h"
 #include "cache/cache.h"
+#include "rio/rio.h"
+#include "sock_interface/sock_interface.h"
 
-void* thread(void *vargp);
+void *thread(void *vargp);
 void read_request(int connfd, char *request, char *headers);
 void append_version(char *request);
-void parse_request(int connfd, char *request, char *headers, 
-        char *host, char *port);
+void parse_request(int connfd, char *request, char *headers, char *host,
+                   char *port);
 void read_requesthdrs(Rio *rp, char *request_headers);
-void parse_uri(char *uri, char *hostname, char *port, char* request);
+void parse_uri(char *uri, char *hostname, char *port, char *request);
 int serve_client(int connfd, char *request, char *headers, char **content);
-void forward_response(int listenfd, char *headers, 
-        char *content, int content_length);
+void forward_response(int listenfd, char *headers, char *content,
+                      int content_length);
 
 static Cache cache;
 
 int
-main(int argc, char* argv[])
+main(int argc, char *argv[])
 {
     int listenfd, *connfdp = NULL;
     struct sockaddr_storage clientaddr;
@@ -35,32 +35,31 @@ main(int argc, char* argv[])
     }
 
     /* Ignore SIGPIPE signal if trying to write to a closed socket */
-    signal(SIGPIPE, SIG_IGN); 
+    signal(SIGPIPE, SIG_IGN);
     cache_init(&cache);
 
     while (1) {
         clientlen = sizeof(struct sockaddr_storage);
-        connfdp = (int*) malloc(sizeof(int));
+        connfdp = (int *)malloc(sizeof(int));
 
-        if ((*connfdp = accept(listenfd, (SA*)&clientaddr, &clientlen)) < 0) {
+        if ((*connfdp = accept(listenfd, (SA *)&clientaddr, &clientlen)) < 0) {
             fprintf(stderr, "%s: %s\n", "accept error", strerror(errno));
             continue;
         }
 
-        pthread_create(&tid, NULL, thread, (void*)connfdp);
+        pthread_create(&tid, NULL, thread, (void *)connfdp);
     }
 
-    return 0; 
+    return 0;
 }
 
-
-void*
+void *
 thread(void *vargp)
 {
-    int connfd = *((int*)vargp), clientfd;
+    int connfd = *((int *)vargp), clientfd;
     pthread_detach(pthread_self());
     free(vargp);
-    
+
     char buf[MAXLINE];
     char request[MAXLINE], headers[MAXLINE], host[MAXLINE], port[MAXLINE];
     char *content, *respone_hdrs;
@@ -81,6 +80,8 @@ thread(void *vargp)
         content_length = serve_client(clientfd, request, headers, &content);
         forward_response(connfd, headers, content, content_length);
         cache_write(&cache, buf, headers, content, content_length);
+        printf("Using: %zu\r\nRemaining: %zu\r\n", cache_size(&cache),
+               MAX_CACHE_SIZE - cache_size(&cache));
         free(content);
     } else {
         forward_response(connfd, respone_hdrs, content, content_length);
@@ -113,7 +114,6 @@ read_requesthdrs(Rio *rp, char *request_headers)
     }
 }
 
-
 void
 append_version(char *request)
 {
@@ -123,12 +123,10 @@ append_version(char *request)
     if (strcasecmp(version, "HTTP/1.0")) {
         sprintf(request, "%s %s %s\r\n", method, uri, "HTTP/1.0");
     }
-
 }
 
 void
-parse_request(int connfd, char *request, char *headers, 
-        char *host, char *port)
+parse_request(int connfd, char *request, char *headers, char *host, char *port)
 {
     char path[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
     char buf[MAXLINE] = "";
@@ -142,7 +140,7 @@ parse_request(int connfd, char *request, char *headers,
         *port = '\0';
         return;
     }
-    
+
     parse_uri(uri, host, port, path);
     sprintf(request, "%s %s %s\r\n", method, path, version);
 
@@ -156,8 +154,9 @@ parse_request(int connfd, char *request, char *headers,
     }
     ptr = strcasestr(headers, "user-agent:");
     if (!ptr) {
-        sprintf(buf, "%sUser-Agent: %s", buf, 
-                "Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3\r\n");
+        sprintf(buf, "%sUser-Agent: %s", buf,
+                "Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 "
+                "Firefox/10.0.3\r\n");
     }
     /* Concatenate client headers with proxy headers */
     strcat(buf, headers);
@@ -166,11 +165,10 @@ parse_request(int connfd, char *request, char *headers,
     printf("Request headers:\r\n");
     printf("%s", request);
     printf("%s", headers);
-
 }
 
 void
-parse_uri(char *uri, char *hostname, char *port, char* path)
+parse_uri(char *uri, char *hostname, char *port, char *path)
 {
     char *ptr;
 
@@ -209,12 +207,10 @@ parse_uri(char *uri, char *hostname, char *port, char* path)
             *path = '\0';
             return;
         }
-
     }
 
     strcpy(path, ptr); /* Copy path */
 }
-
 
 int
 serve_client(int clientfd, char *request, char *headers, char **content)

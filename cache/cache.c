@@ -23,13 +23,12 @@ cache_init(CachePtr cp)
     mm_init();
 }
 
-
 ssize_t
 cache_read(CachePtr cp, char *request, char **response_hdrs, char **content)
 {
     int idx;
     unsigned long long tag = generate_tag(request);
-    size_t content_length;
+    ssize_t content_length;
 
     sem_wait(&cp->readcnt_mutex);
     cp->readcnt++;
@@ -41,7 +40,7 @@ cache_read(CachePtr cp, char *request, char **response_hdrs, char **content)
     if ((idx = find_line(cp, tag)) < 0) {
         content_length = -1;
     } else {
-        *response_hdrs = strdup(cp->cache_set[idx].response_hdr); 
+        *response_hdrs = strdup(cp->cache_set[idx].response_hdr);
         content_length = cp->cache_set[idx].content_length;
         *content = malloc(content_length);
         memcpy(*content, cp->cache_set[idx].content, content_length);
@@ -61,14 +60,13 @@ cache_read(CachePtr cp, char *request, char **response_hdrs, char **content)
     return content_length;
 }
 
-
 void
-cache_write(CachePtr cp, char *request,
-        char *response_hdrs, char *content, size_t content_length)
+cache_write(CachePtr cp, char *request, char *response_hdrs, char *content,
+            size_t content_length)
 {
     size_t len = content_length + strlen(response_hdrs);
-    if (content_length > MAX_OBJECT_SIZE || 
-            (cache_size(cp) + len) >= MAX_CACHE_SIZE) {
+    if (content_length > MAX_OBJECT_SIZE ||
+        (cache_size(cp) + len) >= MAX_CACHE_SIZE) {
         /* TO-DO: Remove element from cache */
         return;
     }
@@ -109,13 +107,13 @@ generate_tag(const char *request)
     char *hash_str;
 
     /* Build the string that will be hashed */
-    hash_str = (char *) malloc(len + 1);
+    hash_str = (char *)malloc(len + 1);
     hash_str[0] = '\0';
     strcpy(hash_str, request);
-    
+
     for (int i = 0; i < len; i++)
         hash = ((hash << 5) + hash) + hash_str[i]; /* hash * 33 + c */
-    
+
     free(hash_str);
     return hash;
 }
@@ -141,14 +139,14 @@ find_empty_line(CachePtr cp)
             return idx;
         }
     }
-    idx = find_victim(cp); 
+    idx = find_victim(cp);
     return idx;
 }
 
-static unsigned int 
+static unsigned int
 find_victim(CachePtr cp)
 {
-    /* LRU algorithm */ 
+    /* LRU algorithm */
     int lru = 0;
     int t = cp->cache_set[0].time;
     int i;

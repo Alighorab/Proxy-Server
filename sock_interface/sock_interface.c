@@ -1,7 +1,7 @@
 #include "sock_interface.h"
 
 int
-open_clientfd(char* hostname, char* port)
+open_clientfd(char *hostname, char *port)
 {
     int clientfd, rc;
     struct addrinfo hints, *listp, *p;
@@ -18,8 +18,9 @@ open_clientfd(char* hostname, char* port)
 
     /* Walk the list for one that we can successfully connect to */
     for (p = listp; p; p = p->ai_next) {
-        /* Create a socket discriptor */ 
-        if ((clientfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) < 0) {
+        /* Create a socket discriptor */
+        if ((clientfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) <
+            0) {
             continue; /* socket failed, try the next */
         }
 
@@ -40,16 +41,16 @@ open_clientfd(char* hostname, char* port)
 }
 
 int
-open_listenfd(char* port)
+open_listenfd(char *port)
 {
     struct addrinfo hints, *listp, *p;
     int listenfd, optval = 1, rc;
 
     /* Get a list of potential server addresses */
     memset(&hints, 0, sizeof(hints));
-    hints.ai_socktype = SOCK_STREAM; /* Accept connections */
+    hints.ai_socktype = SOCK_STREAM;             /* Accept connections */
     hints.ai_flags = AI_PASSIVE | AI_ADDRCONFIG; /* ...on any IP address */
-    hints.ai_flags |= AI_NUMERICSERV; /* ...using port number */
+    hints.ai_flags |= AI_NUMERICSERV;            /* ...using port number */
     if ((rc = getaddrinfo(NULL, port, &hints, &listp)) != 0) {
         fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(rc));
         return -1;
@@ -58,13 +59,14 @@ open_listenfd(char* port)
     /* Walk the list for one that we can bind to */
     for (p = listp; p; p = p->ai_next) {
         /* Create a socket discriptor */
-        if ((listenfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) < 0) {
+        if ((listenfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) <
+            0) {
             continue; /* Socket failed, try the next */
         }
 
         /* Eliminates "Adress already in use" error from bind */
-        setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, 
-                (const void*)&optval, sizeof(int));
+        setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, (const void *)&optval,
+                   sizeof(int));
 
         /* Bind the discriptor to the address */
         if (bind(listenfd, p->ai_addr, p->ai_addrlen) == 0) {

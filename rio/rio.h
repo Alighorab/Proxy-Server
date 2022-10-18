@@ -1,18 +1,18 @@
 #ifndef RIO_h
 #define RIO_h
-    
+
+#include <errno.h>
+#include <fcntl.h>
+#include <netdb.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
-#include <errno.h>
-#include <netdb.h>
+#include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/mman.h>
 #include <sys/wait.h>
-#include <pthread.h>
+#include <unistd.h>
 
 typedef struct sockaddr SA;
 /* Persistent state for the robust I/O (Rio) package */
@@ -27,14 +27,14 @@ typedef struct {
 /* $end rio_t */
 
 /* External variables */
-extern int h_errno;    /* Defined by BIND for DNS errors */ 
+extern int h_errno;    /* Defined by BIND for DNS errors */
 extern char **environ; /* Defined by libc */
 
 /* Rio (Robust I/O) package */
 ssize_t rio_readn(int fd, void *usrbuf, size_t n);
 ssize_t rio_writen(int fd, void *usrbuf, size_t n);
-void rio_readinitb(Rio *rp, int fd); 
-ssize_t	rio_readnb(Rio *rp, void *usrbuf, size_t n);
-ssize_t	rio_readlineb(Rio *rp, void *usrbuf, size_t maxlen);
+void rio_readinitb(Rio *rp, int fd);
+ssize_t rio_readnb(Rio *rp, void *usrbuf, size_t n);
+ssize_t rio_readlineb(Rio *rp, void *usrbuf, size_t maxlen);
 
 #endif

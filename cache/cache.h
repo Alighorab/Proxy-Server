@@ -7,8 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_CACHE_SIZE  1049000     /* 1MB total cache size */
-#define MAX_OBJECT_SIZE 102400      /* 1KB cache object size */
+#define MAX_CACHE_SIZE 1049000 /* 1MB total cache size */
+#define MAX_OBJECT_SIZE 102400 /* 1KB cache object size */
 #define CACHE_LINES 100
 
 typedef struct cache_line {
@@ -28,11 +28,11 @@ typedef struct cache {
 
 void cache_init(CachePtr cp);
 
-ssize_t cache_read(CachePtr cp, char *request,
-        char **response_hdrs, char **content);
+ssize_t cache_read(CachePtr cp, char *request, char **response_hdrs,
+                   char **content);
 
-void cache_write(CachePtr cp, char *request,
-        char *response_hdrs, char *content, size_t content_length);
+void cache_write(CachePtr cp, char *request, char *response_hdrs, char *content,
+                 size_t content_length);
 
 size_t cache_size(CachePtr cp);
 #endif

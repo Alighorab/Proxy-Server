@@ -32,6 +32,11 @@ proxy.o: proxy.c
 proxy: rio.o sock_interface.o memlib.o mm.o cache.o proxy.o
 	$(CC) $(CFLAGS) $(EXCLUDED_CFLAGS) rio.o sock_interface.o cache.o memlib.o mm.o proxy.o -o $@ $(LDFLAGS)
 
+run: proxy
+	./proxy 4000
+
+debug: all
+
 clean:
 	rm -f *~ *.o proxy core *.tar *.zip *.gzip *.bzip *.gz
 
